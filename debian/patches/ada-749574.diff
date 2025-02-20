@@ -1,0 +1,56 @@
+From: Ludovic Brenta <lbrenta@debian.org>
+From: Nicolas Boulenguez <nicolas@debian.org>
+Forwarded: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81087
+Bug-Debian: http://bugs.debian.org/749574
+Description: array index out of range in gnatlink
+ The procedure gnatlink assumes that the Linker_Options.Table contains access
+ values to strings whose 'First index is always 1.  This assumption is wrong
+ for the string returned by function Base_Name.
+ .
+ The wrong indices are not detected because gnatlink is compiled with
+ -gnatp, but the test result is wrong.
+ .
+ PR Ada/81087 shows a reproducer.
+
+--- a/src/gcc/ada/gnatlink.adb
++++ b/src/gcc/ada/gnatlink.adb
+@@ -1294,7 +1294,9 @@
+                                          > Run_Path_Opt'Length
+                              and then
+                                Linker_Options.Table (J)
+-                                 (1 .. Run_Path_Opt'Length) =
++                                 (Linker_Options.Table (J)'First ..
++                                  Linker_Options.Table (J)'First
++                                  + Run_Path_Opt'Length - 1) =
+                                                   Run_Path_Opt
+                            then
+                               --  We have found an already specified
+@@ -1892,7 +1894,9 @@
+             if Linker_Options.Table (J).all = "-Xlinker"
+               and then J < Linker_Options.Last
+               and then Linker_Options.Table (J + 1)'Length > 8
+-              and then Linker_Options.Table (J + 1) (1 .. 8) = "--stack="
++              and then Linker_Options.Table (J + 1)
++                      (Linker_Options.Table (J + 1)'First ..
++                       Linker_Options.Table (J + 1)'First + 7) = "--stack="
+             then
+                if Stack_Op then
+                   Linker_Options.Table (J .. Linker_Options.Last - 2) :=
+@@ -1938,11 +1942,15 @@
+             --  pragma Linker_Options set in the NT runtime.
+ 
+             if (Linker_Options.Table (J)'Length > 17
+-                and then Linker_Options.Table (J) (1 .. 17) =
++                and then Linker_Options.Table (J)
++                        (Linker_Options.Table (J)'First ..
++                         Linker_Options.Table (J)'First + 16) =
+                   "-Xlinker --stack=")
+               or else
+                 (Linker_Options.Table (J)'Length > 12
+-                 and then Linker_Options.Table (J) (1 .. 12) =
++                 and then Linker_Options.Table (J)
++                         (Linker_Options.Table (J)'First ..
++                          Linker_Options.Table (J)'First + 11) =
+                        "-Wl,--stack=")
+             then
+                if Stack_Op then

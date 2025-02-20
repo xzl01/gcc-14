@@ -1,0 +1,47 @@
+commit aad9de322774c25e80f3ade6ecd96f45b62bf40a
+Author: Ian Lance Taylor <iant@golang.org>
+Date:   Tue Oct 29 15:39:02 2024 -0700
+
+    syscall: don't define syscall stub on Hurd
+    
+    Patch from Samuel Thibault.
+    
+    Reviewed-on: https://go-review.googlesource.com/c/gofrontend/+/623415
+
+--- a/src/libgo/go/syscall/syscall_funcs.go
++++ b/src/libgo/go/syscall/syscall_funcs.go
+@@ -2,8 +2,8 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+ 
+-//go:build darwin || dragonfly || freebsd || hurd || linux || netbsd || openbsd || solaris
+-// +build darwin dragonfly freebsd hurd linux netbsd openbsd solaris
++//go:build darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris
++// +build darwin dragonfly freebsd linux netbsd openbsd solaris
+ 
+ package syscall
+ 
+--- a/src/libgo/go/syscall/syscall_funcs_stubs.go
++++ b/src/libgo/go/syscall/syscall_funcs_stubs.go
+@@ -2,8 +2,8 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+ 
+-//go:build aix || rtems
+-// +build aix rtems
++//go:build aix || hurd || rtems
++// +build aix hurd rtems
+ 
+ // These are stubs.
+ 
+--- a/src/libgo/runtime/go-nosys.c
++++ b/src/libgo/runtime/go-nosys.c
+@@ -504,7 +504,7 @@ strerror_r (int errnum, char *buf, size_t buflen)
+ 
+ #endif /* ! HAVE_STRERROR_R */
+ 
+-#ifndef HAVE_SYSCALL
++#if !defined(HAVE_SYSCALL) && !defined(__GNU__) /* GNU/Hurd already has a stub */
+ int
+ syscall(int number __attribute__ ((unused)), ...)
+ {

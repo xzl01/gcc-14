@@ -1,0 +1,72 @@
+From thiago.bauermann@linaro.org  Fri Dec 27 21:47:56 2024
+From: thiago.bauermann@linaro.org (Thiago Jung Bauermann)
+Date: Fri, 27 Dec 2024 18:47:56 -0300
+Subject: [PATCH] gcc/configure: Fix check for assembler section merging
+ support on Arm
+Message-ID: <20241227214756.1059146-1-thiago.bauermann@linaro.org>
+
+In 32-bit Arm assembly, the @ character is the start of a comment so
+the section type needs to use the % character instead.
+
+configure.ac attempts to account for this difference by doing a second
+try when checking the assembler for section merging support.
+Unfortunately there is a bug: because the gcc_GAS_CHECK_FEATURE macro
+has a call to AC_CACHE_CHECK, it will actually skip the second try
+because the gcc_cv_as_shf_merge variable has already been set:
+
+  checking assembler for section merging support... no
+  checking assembler for section merging support... (cached) no
+
+Fix by using a separate variable for the second try, as is done in the
+check for COMDAT group support.
+
+This problem was noticed because the recent binutils commit
+d5cbf916be4a ("gas/ELF: also reject merge entity size being zero") caused
+gas to be stricter about mergeable sections without an entity size:
+
+configure:27013: checking assembler for section merging support
+configure:27022: /path/to/as   --fatal-warnings -o conftest.o conftest.s >&5
+conftest.s: Assembler messages:
+conftest.s:1: Warning: invalid merge / string entity size
+conftest.s: Error: 1 warning, treating warnings as errors
+configure:27025: $? = 1
+configure: failed program was
+.section .rodata.str, "aMS", @progbits, 1
+configure:27036: result: no
+
+In previous versions of gas the conftest.s program above was accepted
+and configure detected support for section merging.
+
+See also:
+https://linaro.atlassian.net/browse/GNU-1427
+https://sourceware.org/bugzilla/show_bug.cgi?id=32491
+
+Tested on armv8l-linux-gnueabihf.
+
+gcc/ChangeLog:
+	* configure.ac: Fix check for HAVE_GAS_SHF_MERGE on Arm targets.
+	* configure: Regenerate.
+---
+ gcc/configure    | 17 +++++++++--------
+ gcc/configure.ac |  6 ++++--
+ 2 files changed, 13 insertions(+), 10 deletions(-)
+
+--- a/src/gcc/configure.ac
++++ b/src/gcc/configure.ac
+@@ -3591,12 +3591,14 @@ gcc_GAS_CHECK_FEATURE(section merging su
+  [--fatal-warnings],
+  [.section .rodata.str, "aMS", @progbits, 1])
+ if test $gcc_cv_as_shf_merge = no; then
+-  gcc_GAS_CHECK_FEATURE(section merging support, gcc_cv_as_shf_merge,
++  gcc_GAS_CHECK_FEATURE(section merging support (%progbits),
++    gcc_cv_as_shf_merge_percent,
+     [--fatal-warnings],
+     [.section .rodata.str, "aMS", %progbits, 1])
+ fi
+ AC_DEFINE_UNQUOTED(HAVE_GAS_SHF_MERGE,
+-  [`if test $gcc_cv_as_shf_merge = yes; then echo 1; else echo 0; fi`],
++  [`if test $gcc_cv_as_shf_merge = yes \
++    || test $gcc_cv_as_shf_merge_percent = yes; then echo 1; else echo 0; fi`],
+ [Define 0/1 if your assembler supports marking sections with SHF_MERGE flag.])
+ 
+ gcc_cv_ld_aligned_shf_merge=yes
